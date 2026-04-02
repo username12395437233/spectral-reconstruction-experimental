@@ -1,0 +1,125 @@
+1) Сначала только проверка системы
+
+Запустите в WSL Ubuntu:
+
+uname -a
+cat /etc/os-release
+
+python3 --version
+mamba --version
+
+gcc --version
+g++ --version
+
+/usr/lib/wsl/lib/nvidia-smi || nvidia-smi
+
+which nvcc || true
+nvcc --version || true
+
+ls -d /usr/local/cuda* 2>/dev/null || true
+
+Что должно получиться:
+
+nvidia-smi должен показать вашу GPU;
+gcc и g++ должны находиться;
+nvcc --version либо уже покажет версию CUDA Toolkit, либо команды не будет.
+Это ровно то, что нужно перед сборкой CUDA-кода в WSL.
+2) Если gcc/g++ нет — ставим
+sudo apt update
+sudo apt install -y build-essential gcc g++
+3) Если nvcc нет, либо он не 12.6 — ставим CUDA Toolkit 12.6 для WSL
+
+Сначала добавьте официальный репозиторий NVIDIA для WSL-Ubuntu:
+
+wget https://developer.download.nvidia.com/compute/cuda/repos/wsl-ubuntu/x86_64/cuda-keyring_1.1-1_all.deb
+sudo dpkg -i cuda-keyring_1.1-1_all.deb
+sudo apt-get update
+
+Теперь установите toolkit:
+
+sudo apt-get install -y cuda-toolkit-12-6
+
+Добавьте его в PATH:
+
+echo 'export PATH=/usr/local/cuda-12.6/bin:$PATH' >> ~/.bashrc
+echo 'export LD_LIBRARY_PATH=/usr/local/cuda-12.6/lib64:$LD_LIBRARY_PATH' >> ~/.bashrc
+source ~/.bashrc
+hash -r
+
+Проверьте:
+
+which nvcc
+nvcc --version
+
+Если здесь показывается 12.6, можно идти дальше. Выбор 12.6 здесь — осознанный: WSL-гайд рекомендует cuda-toolkit-12-x, а текущая стабильная матрица PyTorch поддерживает cu126.
+
+4) Создаём новое чистое окружение
+mamba create -n test_mamba3 python=3.10 -y
+mamba activate test_mamba3
+
+PyTorch сейчас рекомендует Python 3.10+ на Linux.
+
+5) Ставим базовые инструменты Python
+python -m pip install --upgrade pip setuptools wheel ninja
+6) Ставим PyTorch под CUDA 12.6
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu126
+
+Это соответствует текущей стабильной установке PyTorch для Linux + pip + CUDA 12.6.
+
+7) Проверяем, что PyTorch видит GPU
+python - <<'PY'
+import torch
+print("torch:", torch.__version__)
+print("torch cuda:", torch.version.cuda)
+print("cuda available:", torch.cuda.is_available())
+print("device count:", torch.cuda.device_count())
+if torch.cuda.is_available():
+    print("device 0:", torch.cuda.get_device_name(0))
+PY
+
+Если cuda available: True, значит связка WSL + драйвер + PyTorch уже живая. PyTorch сам рекомендует torch.cuda.is_available() как базовую проверку доступа к GPU.
+
+8) Ставим Mamba3 из исходников
+
+В свежем окружении я рекомендую не использовать --force-reinstall, чтобы pip не пытался заново перетаскивать torch, как это уже происходило у вас раньше. Это практический обход на основе вашего прошлого лога. Официальное требование Mamba3 — именно установка из source с --no-build-isolation.
+
+MAMBA_FORCE_BUILD=TRUE pip install --no-cache-dir git+https://github.com/state-spaces/mamba.git --no-build-isolation
+9) Проверяем импорт Mamba3
+python - <<'PY'
+import torch
+from mamba_ssm import Mamba3
+
+print("torch:", torch.__version__)
+print("torch cuda:", torch.version.cuda)
+print("cuda available:", torch.cuda.is_available())
+print("Mamba3 import OK")
+PY
+10) Сначала маленький smoke test
+
+Сначала маленький тест, чтобы не упереться сразу в память:
+
+python - <<'PY'
+import torch
+from mamba_ssm import Mamba3
+
+batch, length, dim = 1, 256, 128
+x = torch.randn(batch, length, dim).to(torch.bfloat16).to("cuda")
+
+model = Mamba3(
+    d_model=dim,
+    d_state=64,
+    headdim=32,
+    is_mimo=True,
+    mimo_rank=2,
+    chunk_size=16,
+    is_outproj_norm=False,
+    dtype=torch.bfloat16,
+).to("cuda")
+
+y = model(x)
+print("output shape:", y.shape)
+assert y.shape == x.shape
+print("Mamba3 small OK")
+PY
+
+Официальный README показывает, что Mamba3 используется как from mamba_ssm import Mamba3, работает на cuda, и выход должен иметь ту же форму, что и вход.
