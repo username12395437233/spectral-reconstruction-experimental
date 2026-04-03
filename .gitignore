@@ -1,30 +1,30 @@
-# # Byte-compiled / optimized / DLL files
-# __pycache__/
-# *.py[cod]
-# *$py.class
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
 
-# # Virtual Environments (highly recommended to ignore)
-# .venv/
-# venv/
-# ENV/
-# env/
+# Virtual Environments (highly recommended to ignore)
+.venv/
+venv/
+ENV/
+env/
 
-# # Distribution / packaging
-# dist/
-# build/
-# *.egg-info/
-# *.egg
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+*.egg
 
-# # Unit test / coverage reports
-# .tox/
-# .coverage
-# .cache
-# nosetests.xml
-# coverage.xml
-# htmlcov/
+# Unit test / coverage reports
+.tox/
+.coverage
+.cache
+nosetests.xml
+coverage.xml
+htmlcov/
 
-# # Jupyter Notebook checkpoints
-# .ipynb_checkpoints
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints
 
-# # Environment variables (sensitive data)
-# .env
+# Environment variables (sensitive data)
+.env
