@@ -10,7 +10,7 @@ data:
 
 model:
   d_model: 126
-  d_state: 8
+  d_state: 64
   d_conv: 4
   headdim: 16
   expand: 2

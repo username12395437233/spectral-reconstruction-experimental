@@ -20,6 +20,13 @@ class SS2D_Enhanced(nn.Module):
         ssm_version = ssm_version.lower()
 
         if ssm_version == "mamba3":
+            # Mamba3's Triton rotary-QK kernel needs the effective QK dimension to be >= 16.
+            # With the default rope_fraction=0.5 in upstream Mamba3, this implies d_state >= 64.
+            if d_state < 64:
+                raise ValueError(
+                    f"Mamba3 requires d_state >= 64 for the current kernel path, got d_state={d_state}. "
+                    "Set model.d_state to 64 or 128, or switch model.ssm_version to 'mamba2'."
+                )
             from mamba_ssm import Mamba3
 
             self.mamba = Mamba3(
