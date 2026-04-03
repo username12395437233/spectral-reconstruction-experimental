@@ -1,0 +1,19 @@
+data:
+  path: "/mnt/c/Users/User/repo/datasets/CAVE"
+  spatial_size: [256, 256]
+  train_ratio: 0.8
+
+model:
+  d_model: 64
+  d_state: 8
+  headdim: 16
+  expand: 2
+  use_wavelet: false
+  use_gradient_attn: true
+  
+
+training:
+  batch_size: 4
+  epochs: 200
+  lr: 0.0001   # или 1e-4 без кавычек
+  device: "cuda"

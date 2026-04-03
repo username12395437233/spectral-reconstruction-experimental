@@ -8,6 +8,7 @@ sudo apt update && sudo apt install -y build-essential
 
 ```bash
 pip install --upgrade pip setuptools wheel ninja packaging
+pip install einops timm h5py scipy scikit-image matplotlib tqdm pytorch_wavelets PyWavelets
 ```
 
 # 3. NOTION! Depends of you GPU, drivers, versions, CUDA, etc.
