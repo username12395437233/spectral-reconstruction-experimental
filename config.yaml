@@ -3,10 +3,20 @@ data:
   spatial_size: [256, 256]
   train_patch_size: [128, 128]
   val_patch_size: []
+  test_patch_size: []
   patches_per_scene: 32
   train_ratio: 0.8
   augment: true
   normalization: "by_dtype"
+  splits:
+    val:
+      - face
+      - fake_and_real_beers
+      - watercolors
+    test:
+      - balloons
+      - oil_painting
+      - fake_and_real_strawberries
 
 model:
   d_model: 126

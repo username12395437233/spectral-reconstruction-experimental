@@ -17,26 +17,40 @@ def train():
     
     train_dataset = CAVEDataset(
         Path(config['data']['path']),
-        train=True,
+        split='train',
         train_ratio=config['data']['train_ratio'],
         spatial_size=tuple(config['data']['spatial_size']),
         patch_size=tuple(config['data'].get('train_patch_size', [])) or None,
         patches_per_scene=config['data'].get('patches_per_scene', 1),
         augment=config['data'].get('augment', True),
         normalization=config['data'].get('normalization', 'fixed_255'),
+        split_scenes=config['data'].get('splits'),
     )
     val_dataset = CAVEDataset(
         Path(config['data']['path']),
-        train=False,
+        split='val',
         train_ratio=config['data']['train_ratio'],
         spatial_size=tuple(config['data']['spatial_size']),
         patch_size=tuple(config['data'].get('val_patch_size', [])) or None,
         patches_per_scene=1,
         augment=False,
         normalization=config['data'].get('normalization', 'fixed_255'),
+        split_scenes=config['data'].get('splits'),
+    )
+    test_dataset = CAVEDataset(
+        Path(config['data']['path']),
+        split='test',
+        train_ratio=config['data']['train_ratio'],
+        spatial_size=tuple(config['data']['spatial_size']),
+        patch_size=tuple(config['data'].get('test_patch_size', [])) or None,
+        patches_per_scene=1,
+        augment=False,
+        normalization=config['data'].get('normalization', 'fixed_255'),
+        split_scenes=config['data'].get('splits'),
     )
     train_loader = DataLoader(train_dataset, batch_size=config['training']['batch_size'], shuffle=True, num_workers=2)
     val_loader = DataLoader(val_dataset, batch_size=1, shuffle=False)
+    print(f"Split sizes: train={len(train_dataset.scenes)}, val={len(val_dataset.scenes)}, test={len(test_dataset.scenes)}")
     
     model = UltraHSINet(
         d_model=config['model']['d_model'],
