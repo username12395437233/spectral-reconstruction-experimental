@@ -52,3 +52,5 @@ model:
 If GPU memory is limited, reduce `train_patch_size` first and only then `batch_size`.
 
 `Mamba3` can fail in Triton kernels on some environments during forward/backward. If training crashes inside `mamba3_*` kernels, switch `model.ssm_version` to `"mamba2"` and continue improving the data pipeline / loss / architecture first.
+
+Validation logs include `PSNR`, `RMSE`, `SAM`, and `MSSIM`.
