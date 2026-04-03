@@ -11,15 +11,20 @@ class SS2D_Enhanced(nn.Module):
 
         if headdim is None:
             headdim = max(8, d_model // 4)
-        if d_model % headdim != 0:
-            headdim = math.gcd(d_model, headdim)
-        if headdim <= 0:
-            raise ValueError(f"Failed to derive a valid headdim for d_model={d_model}")
 
         self.norm = nn.LayerNorm(d_model)
         ssm_version = ssm_version.lower()
 
         if ssm_version == "mamba3":
+            if headdim < 16:
+                raise ValueError(
+                    f"Mamba3 requires headdim >= 16 for the current kernel path, got headdim={headdim}."
+                )
+            if d_model % headdim != 0:
+                raise ValueError(
+                    f"Mamba3 requires d_model divisible by headdim, got d_model={d_model}, headdim={headdim}. "
+                    "Choose a model.d_model so that bottleneck channels (4 * d_model) are divisible by headdim."
+                )
             # Mamba3's Triton rotary-QK kernel needs the effective QK dimension to be >= 16.
             # With the default rope_fraction=0.5 in upstream Mamba3, this implies d_state >= 64.
             if d_state < 64:
@@ -37,6 +42,10 @@ class SS2D_Enhanced(nn.Module):
                 headdim=headdim,
             )
         elif ssm_version == "mamba2":
+            if d_model % headdim != 0:
+                headdim = math.gcd(d_model, headdim)
+            if headdim <= 0:
+                raise ValueError(f"Failed to derive a valid headdim for d_model={d_model}")
             from mamba_ssm.modules.mamba2 import Mamba2
 
             self.mamba = Mamba2(

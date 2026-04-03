@@ -19,12 +19,12 @@ data:
       - fake_and_real_strawberries_ms
 
 model:
-  d_model: 126
+  d_model: 128
   d_state: 64
   d_conv: 4
   headdim: 16
   expand: 2
-  ssm_version: "mamba2"
+  ssm_version: "mamba3"
   use_wavelet: true
   use_gradient_attn: true
 
