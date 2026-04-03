@@ -8,7 +8,7 @@ model:
   d_state: 8
   headdim: 16
   expand: 2
-  use_wavelet: false
+  use_wavelet: true
   use_gradient_attn: true
   
 

@@ -1,29 +1,31 @@
 import torch
 import torch.nn as nn
+from models.wavelet_module import WaveletDecomposition
 from models.gradient_attention import GradientAttention
 from models.mif_module import MIFModule
 
 class UltraHSINet(nn.Module):
-    def __init__(self, d_model=64, use_wavelet=False, use_gradient_attn=True, num_spectral=31):
+    def __init__(self, d_model=64, use_wavelet=True, use_gradient_attn=True, num_spectral=31):
         super().__init__()
         self.use_wavelet = use_wavelet
         self.use_gradient_attn = use_gradient_attn
         
-        self.input_conv = nn.Conv2d(3, d_model, 3, padding=1)
-        
         if use_wavelet:
-            from models.wavelet_module import WaveletDecomposition
             self.wavelet = WaveletDecomposition()
-            self.hf_cnn = nn.Sequential(
-                nn.Conv2d(3, d_model, 3, padding=1),
-                nn.BatchNorm2d(d_model),
-                nn.ReLU()
-            )
-            # Для LL нужна отдельная свёртка с учётом уменьшенного размера
+            # LL (низкие частоты) -> проекция в d_model и апскейл до исходного размера
             self.ll_conv = nn.Sequential(
                 nn.Conv2d(3, d_model, 3, padding=1),
                 nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False)
             )
+            # Высокочастотные компоненты (LH, HL, HH) объединяются в 9 каналов
+            self.hf_cnn = nn.Sequential(
+                nn.Conv2d(9, d_model, 3, padding=1),
+                nn.BatchNorm2d(d_model),
+                nn.ReLU(),
+                nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False)
+            )
+        else:
+            self.input_conv = nn.Conv2d(3, d_model, 3, padding=1)
         
         # Encoder
         self.down1 = nn.Conv2d(d_model, d_model*2, 4, stride=2, padding=1)
@@ -45,24 +47,23 @@ class UltraHSINet(nn.Module):
     
     def forward(self, rgb):
         if self.use_wavelet:
-            LL, LH, HL, HH = self.wavelet(rgb)
-            lf = self.ll_conv(LL)                     # (B, d_model, H, W)
-            hf = torch.stack([LH, HL, HH], dim=2)     # (B, 3, 3, H/2, W/2) — упростим
-            hf = hf.view(hf.size(0), 3, hf.size(3), hf.size(4))  # (B, 3, H/2, W/2)
-            hf = nn.functional.interpolate(hf, scale_factor=2, mode='bilinear', align_corners=False)  # (B, 3, H, W)
-            hf = self.hf_cnn(hf)                      # (B, d_model, H, W)
+            LL, LH, HL, HH = self.wavelet(rgb)      # каждый: (B,3,H/2,W/2)
+            lf = self.ll_conv(LL)                   # (B,d_model,H,W)
+            # Объединяем LH, HL, HH в 9 каналов
+            hf = torch.cat([LH, HL, HH], dim=1)     # (B,9,H/2,W/2)
+            hf = self.hf_cnn(hf)                    # (B,d_model,H,W)
             x = lf + hf
         else:
-            x = self.input_conv(rgb)
+            x = self.input_conv(rgb)                # (B,d_model,H,W)
         
-        e1 = self.down1(x)
-        e2 = self.down2(e1)
-        b = self.bottleneck(e2)
-        d2 = self.up2(b)
+        e1 = self.down1(x)      # (B,d_model*2,H/2,W/2)
+        e2 = self.down2(e1)     # (B,d_model*4,H/4,W/4)
+        b = self.bottleneck(e2) # (B,d_model*4,H/4,W/4)
+        d2 = self.up2(b)        # (B,d_model*2,H/2,W/2)
         if self.use_gradient_attn:
             d2 = self.grad_attn2(d2)
         d2 = d2 + e1
-        d1 = self.up1(d2)
+        d1 = self.up1(d2)       # (B,d_model,H,W)
         if self.use_gradient_attn:
             d1 = self.grad_attn1(d1)
         d1 = d1 + x
