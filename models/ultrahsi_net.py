@@ -5,7 +5,18 @@ from models.gradient_attention import GradientAttention
 from models.mif_module import MIFModule
 
 class UltraHSINet(nn.Module):
-    def __init__(self, d_model=64, use_wavelet=True, use_gradient_attn=True, num_spectral=31):
+    def __init__(
+        self,
+        d_model=64,
+        d_state=16,
+        d_conv=4,
+        expand=2,
+        headdim=16,
+        ssm_version="mamba3",
+        use_wavelet=True,
+        use_gradient_attn=True,
+        num_spectral=31,
+    ):
         super().__init__()
         self.use_wavelet = use_wavelet
         self.use_gradient_attn = use_gradient_attn
@@ -31,7 +42,14 @@ class UltraHSINet(nn.Module):
         self.down1 = nn.Conv2d(d_model, d_model*2, 4, stride=2, padding=1)
         self.down2 = nn.Conv2d(d_model*2, d_model*4, 4, stride=2, padding=1)
         
-        self.bottleneck = MIFModule(d_model*4)
+        self.bottleneck = MIFModule(
+            d_model * 4,
+            d_state=d_state,
+            d_conv=d_conv,
+            expand=expand,
+            headdim=headdim,
+            ssm_version=ssm_version,
+        )
         
         self.up2 = nn.ConvTranspose2d(d_model*4, d_model*2, 4, stride=2, padding=1)
         self.up1 = nn.ConvTranspose2d(d_model*2, d_model, 4, stride=2, padding=1)

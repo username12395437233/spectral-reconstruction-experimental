@@ -19,19 +19,32 @@ def train():
         Path(config['data']['path']),
         train=True,
         train_ratio=config['data']['train_ratio'],
-        spatial_size=tuple(config['data']['spatial_size'])
+        spatial_size=tuple(config['data']['spatial_size']),
+        patch_size=tuple(config['data'].get('train_patch_size', [])) or None,
+        patches_per_scene=config['data'].get('patches_per_scene', 1),
+        augment=config['data'].get('augment', True),
+        normalization=config['data'].get('normalization', 'fixed_255'),
     )
     val_dataset = CAVEDataset(
         Path(config['data']['path']),
         train=False,
         train_ratio=config['data']['train_ratio'],
-        spatial_size=tuple(config['data']['spatial_size'])
+        spatial_size=tuple(config['data']['spatial_size']),
+        patch_size=tuple(config['data'].get('val_patch_size', [])) or None,
+        patches_per_scene=1,
+        augment=False,
+        normalization=config['data'].get('normalization', 'fixed_255'),
     )
     train_loader = DataLoader(train_dataset, batch_size=config['training']['batch_size'], shuffle=True, num_workers=2)
     val_loader = DataLoader(val_dataset, batch_size=1, shuffle=False)
     
     model = UltraHSINet(
         d_model=config['model']['d_model'],
+        d_state=config['model'].get('d_state', 16),
+        d_conv=config['model'].get('d_conv', 4),
+        expand=config['model'].get('expand', 2),
+        headdim=config['model'].get('headdim', 16),
+        ssm_version=config['model'].get('ssm_version', 'mamba3'),
         use_wavelet=config['model']['use_wavelet'],
         use_gradient_attn=config['model']['use_gradient_attn']
     ).to(device)
