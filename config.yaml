@@ -10,13 +10,13 @@ data:
   normalization: "by_dtype"
   splits:
     val:
-      - face
-      - fake_and_real_beers
-      - watercolors
+      - face_ms
+      - fake_and_real_beers_ms
+      - watercolors_ms
     test:
-      - balloons
-      - oil_painting
-      - fake_and_real_strawberries
+      - balloons_ms
+      - oil_painting_ms
+      - fake_and_real_strawberries_ms
 
 model:
   d_model: 126
@@ -27,10 +27,9 @@ model:
   ssm_version: "mamba2"
   use_wavelet: true
   use_gradient_attn: true
-  
 
 training:
   batch_size: 8
   epochs: 200
-  lr: 0.0001   # или 1e-4 без кавычек
+  lr: 0.0001 # или 1e-4 без кавычек
   device: "cuda"
