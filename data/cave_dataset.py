@@ -73,6 +73,10 @@ class CAVEDataset(Dataset):
     def _normalize(self, rgb, hsi):
         if self.normalization == "fixed_255":
             return rgb / 255.0, hsi / 255.0
+        if self.normalization == "by_dtype":
+            rgb_scale = self.rgb_scale if self.rgb_scale is not None else 255.0
+            hsi_scale = self.hsi_scale if self.hsi_scale is not None else 65535.0
+            return rgb / rgb_scale, hsi / hsi_scale
         if self.normalization == "per_image_max":
             return rgb / (rgb.max() + 1e-8), hsi / (hsi.max() + 1e-8)
         raise ValueError(f"Unknown normalization mode: {self.normalization}")
@@ -118,18 +122,25 @@ class CAVEDataset(Dataset):
 
         rgb_path, png_paths = self.scenes[idx]
 
-        rgb = np.array(Image.open(rgb_path)).astype(np.float32)
+        rgb_raw = np.array(Image.open(rgb_path))
+        self.rgb_scale = float(np.iinfo(rgb_raw.dtype).max) if np.issubdtype(rgb_raw.dtype, np.integer) else 255.0
+        rgb = rgb_raw.astype(np.float32)
         if rgb.ndim == 2:
             rgb = np.stack([rgb, rgb, rgb], axis=-1)
         elif rgb.shape[-1] == 4:
             rgb = rgb[:, :, :3]
 
         hsi_channels = []
+        hsi_scale = None
         for path in png_paths:
-            img = np.array(Image.open(path)).astype(np.float32)
+            img_raw = np.array(Image.open(path))
+            if hsi_scale is None:
+                hsi_scale = float(np.iinfo(img_raw.dtype).max) if np.issubdtype(img_raw.dtype, np.integer) else 255.0
+            img = img_raw.astype(np.float32)
             if img.ndim == 3:
                 img = img[:, :, 0]
             hsi_channels.append(img)
+        self.hsi_scale = hsi_scale
         hsi = np.stack(hsi_channels, axis=-1)
 
         h, w, c = hsi.shape
