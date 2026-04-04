@@ -4,6 +4,20 @@ from models.wavelet_module import WaveletDecomposition
 from models.gradient_attention import GradientAttention
 from models.mif_module import MIFModule
 
+
+class ResidualRefinementBlock(nn.Module):
+    def __init__(self, channels):
+        super().__init__()
+        self.block = nn.Sequential(
+            nn.Conv2d(channels, channels, 3, padding=1),
+            nn.GELU(),
+            nn.Conv2d(channels, channels, 3, padding=1),
+        )
+
+    def forward(self, x):
+        return x + self.block(x)
+
+
 class UltraHSINet(nn.Module):
     def __init__(
         self,
@@ -57,10 +71,26 @@ class UltraHSINet(nn.Module):
         if use_gradient_attn:
             self.grad_attn2 = GradientAttention(d_model*2)
             self.grad_attn1 = GradientAttention(d_model)
-        
+
+        self.pre_head = nn.Sequential(
+            nn.Conv2d(d_model, d_model, 3, padding=1),
+            nn.GELU(),
+            ResidualRefinementBlock(d_model),
+            ResidualRefinementBlock(d_model),
+        )
+        self.spectral_mixer = nn.Sequential(
+            nn.Conv2d(d_model, d_model, 1),
+            nn.GELU(),
+            nn.Conv2d(d_model, d_model, 1),
+        )
+        self.rgb_skip = nn.Sequential(
+            nn.Conv2d(3, d_model // 2, 3, padding=1),
+            nn.GELU(),
+            nn.Conv2d(d_model // 2, num_spectral, 1),
+        )
         self.output_conv = nn.Sequential(
             nn.Conv2d(d_model, num_spectral, 3, padding=1),
-            nn.Sigmoid()
+            nn.Sigmoid(),
         )
     
     def forward(self, rgb):
@@ -85,5 +115,8 @@ class UltraHSINet(nn.Module):
         if self.use_gradient_attn:
             d1 = self.grad_attn1(d1)
         d1 = d1 + x
-        out = self.output_conv(d1)
+        head_feat = self.pre_head(d1)
+        head_feat = head_feat + self.spectral_mixer(head_feat)
+        spectral_logits = self.output_conv[0](head_feat) + self.rgb_skip(rgb)
+        out = self.output_conv[1](spectral_logits)
         return out
