@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.fft
 
+
 class SpectralAngleMapperLoss(nn.Module):
     def forward(self, pred, target):
         dot = (pred * target).sum(dim=1)
@@ -10,24 +11,39 @@ class SpectralAngleMapperLoss(nn.Module):
         cos = dot / (norm_pred * norm_target + 1e-8)
         return torch.acos(torch.clamp(cos, -0.999, 0.999)).mean()
 
+
 class FastFourierLoss(nn.Module):
     def forward(self, pred, target):
-        fft_pred = torch.fft.fftn(pred, dim=(-2,-1))
-        fft_target = torch.fft.fftn(target, dim=(-2,-1))
-        return nn.functional.l1_loss(fft_pred.real, fft_target.real) + \
-               nn.functional.l1_loss(fft_pred.imag, fft_target.imag)
+        fft_pred = torch.fft.fftn(pred, dim=(-2, -1))
+        fft_target = torch.fft.fftn(target, dim=(-2, -1))
+        return nn.functional.l1_loss(fft_pred.real, fft_target.real) + nn.functional.l1_loss(
+            fft_pred.imag, fft_target.imag
+        )
+
+
+class SpectralDifferenceLoss(nn.Module):
+    def forward(self, pred, target):
+        pred_diff = pred[:, 1:, :, :] - pred[:, :-1, :, :]
+        target_diff = target[:, 1:, :, :] - target[:, :-1, :, :]
+        return nn.functional.l1_loss(pred_diff, target_diff)
+
 
 class CombinedLoss(nn.Module):
-    def __init__(self, weight_l1=1.0, weight_sam=0.1, weight_fft=0.01):
+    def __init__(self, weight_l1=1.0, weight_sam=0.1, weight_fft=0.01, weight_spectral_diff=0.2):
         super().__init__()
         self.l1 = nn.L1Loss()
         self.sam = SpectralAngleMapperLoss()
         self.fft = FastFourierLoss()
+        self.spectral_diff = SpectralDifferenceLoss()
         self.w_l1 = weight_l1
         self.w_sam = weight_sam
         self.w_fft = weight_fft
-    
+        self.w_spectral_diff = weight_spectral_diff
+
     def forward(self, pred, target):
-        return self.w_l1 * self.l1(pred, target) + \
-               self.w_sam * self.sam(pred, target) + \
-               self.w_fft * self.fft(pred, target)
+        return (
+            self.w_l1 * self.l1(pred, target)
+            + self.w_sam * self.sam(pred, target)
+            + self.w_fft * self.fft(pred, target)
+            + self.w_spectral_diff * self.spectral_diff(pred, target)
+        )

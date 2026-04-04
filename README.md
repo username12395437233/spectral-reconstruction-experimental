@@ -62,3 +62,9 @@ To evaluate the saved best checkpoint without retraining:
 ```bash
 python evaluate_best.py
 ```
+
+By default it evaluates `best_psnr_model.pth`. To evaluate the SAM-optimized checkpoint:
+
+```bash
+python evaluate_best.py best_sam_model.pth
+```

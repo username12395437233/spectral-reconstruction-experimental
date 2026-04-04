@@ -118,7 +118,9 @@ def train():
     criterion = CombinedLoss()
 
     best_psnr = float("-inf")
-    best_model_path = Path("best_model.pth")
+    best_sam = float("inf")
+    best_psnr_model_path = Path("best_psnr_model.pth")
+    best_sam_model_path = Path("best_sam_model.pth")
 
     for epoch in range(config["training"]["epochs"]):
         model.train()
@@ -146,14 +148,22 @@ def train():
 
         if val_metrics["psnr"] > best_psnr:
             best_psnr = val_metrics["psnr"]
-            torch.save(model.state_dict(), best_model_path)
+            torch.save(model.state_dict(), best_psnr_model_path)
+        if val_metrics["sam"] < best_sam:
+            best_sam = val_metrics["sam"]
+            torch.save(model.state_dict(), best_sam_model_path)
 
-    print(f"Training finished. Best val PSNR: {best_psnr:.2f} dB")
+    print(f"Training finished. Best val PSNR: {best_psnr:.2f} dB, Best val SAM: {best_sam:.2f} deg")
 
-    best_model = build_model(config, device)
-    best_model.load_state_dict(torch.load(best_model_path, map_location=device))
-    test_metrics = evaluate(best_model, test_loader, device)
-    print(format_metrics("Final test", test_metrics))
+    best_psnr_model = build_model(config, device)
+    best_psnr_model.load_state_dict(torch.load(best_psnr_model_path, map_location=device))
+    best_psnr_test_metrics = evaluate(best_psnr_model, test_loader, device)
+    print(format_metrics("Final test (best PSNR)", best_psnr_test_metrics))
+
+    best_sam_model = build_model(config, device)
+    best_sam_model.load_state_dict(torch.load(best_sam_model_path, map_location=device))
+    best_sam_test_metrics = evaluate(best_sam_model, test_loader, device)
+    print(format_metrics("Final test (best SAM)", best_sam_test_metrics))
 
 
 if __name__ == "__main__":

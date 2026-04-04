@@ -1,4 +1,5 @@
 import torch
+import sys
 from pathlib import Path
 from torch.utils.data import DataLoader
 import yaml
@@ -62,9 +63,10 @@ def main():
         config = yaml.safe_load(f)
 
     device = torch.device(config["training"]["device"])
-    checkpoint_path = Path("best_model.pth")
+    checkpoint_name = sys.argv[1] if len(sys.argv) > 1 else "best_psnr_model.pth"
+    checkpoint_path = Path(checkpoint_name)
     if not checkpoint_path.exists():
-        raise FileNotFoundError("best_model.pth not found. Train the model first.")
+        raise FileNotFoundError(f"{checkpoint_name} not found. Train the model first.")
 
     test_dataset = build_test_dataset(config)
     test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False)
@@ -75,7 +77,7 @@ def main():
 
     metrics = evaluate(model, test_loader, device)
     print(
-        f"Best model test: "
+        f"{checkpoint_name} test: "
         f"PSNR={metrics['psnr']:.2f} dB, "
         f"RMSE={metrics['rmse']:.4f}, "
         f"SAM={metrics['sam']:.2f} deg, "
