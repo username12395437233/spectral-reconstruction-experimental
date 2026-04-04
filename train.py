@@ -1,14 +1,16 @@
+import copy
+from pathlib import Path
+
 import torch
 import torch.optim as optim
-from pathlib import Path
+import yaml
 from torch.utils.data import DataLoader
 from tqdm import tqdm
-import yaml
 
 from data.cave_dataset import CAVEDataset
 from models.ultrahsi_net import UltraHSINet
 from utils.losses import CombinedLoss
-from utils.metrics import psnr, rmse, sam, mssim
+from utils.metrics import mssim, psnr, rmse, sam
 
 
 def build_datasets(config):
@@ -57,14 +59,24 @@ def build_model(config, device):
     ).to(device)
 
 
+def create_ema_model(model):
+    ema_model = copy.deepcopy(model)
+    ema_model.eval()
+    for param in ema_model.parameters():
+        param.requires_grad_(False)
+    return ema_model
+
+
+def update_ema(model, ema_model, decay):
+    with torch.no_grad():
+        model_state = model.state_dict()
+        for name, ema_param in ema_model.state_dict().items():
+            ema_param.copy_(ema_param * decay + model_state[name] * (1.0 - decay))
+
+
 def evaluate(model, data_loader, device):
     model.eval()
-    totals = {
-        "psnr": 0.0,
-        "rmse": 0.0,
-        "sam": 0.0,
-        "mssim": 0.0,
-    }
+    totals = {"psnr": 0.0, "rmse": 0.0, "sam": 0.0, "mssim": 0.0}
 
     with torch.no_grad():
         for rgb, hsi in data_loader:
@@ -113,12 +125,18 @@ def train():
     )
 
     model = build_model(config, device)
-    optimizer = optim.Adam(model.parameters(), lr=config["training"]["lr"])
+    ema_model = create_ema_model(model)
+    optimizer = optim.AdamW(
+        model.parameters(),
+        lr=config["training"]["lr"],
+        weight_decay=config["training"].get("weight_decay", 1e-4),
+    )
     scheduler = optim.lr_scheduler.CosineAnnealingLR(
         optimizer, T_max=config["training"]["epochs"]
     )
     criterion = CombinedLoss()
     coarse_loss_weight = config["training"].get("coarse_loss_weight", 0.3)
+    ema_decay = config["training"].get("ema_decay", 0.999)
 
     best_psnr = float("-inf")
     best_sam = float("inf")
@@ -139,10 +157,11 @@ def train():
                 loss = loss + coarse_loss_weight * criterion(coarse, hsi)
             loss.backward()
             optimizer.step()
+            update_ema(model, ema_model, ema_decay)
             epoch_loss += loss.item()
 
         scheduler.step()
-        val_metrics = evaluate(model, val_loader, device)
+        val_metrics = evaluate(ema_model, val_loader, device)
 
         print(
             f"Epoch {epoch + 1}: Loss={epoch_loss / len(train_loader):.4f}, "
@@ -154,10 +173,10 @@ def train():
 
         if val_metrics["psnr"] > best_psnr:
             best_psnr = val_metrics["psnr"]
-            torch.save(model.state_dict(), best_psnr_model_path)
+            torch.save(ema_model.state_dict(), best_psnr_model_path)
         if val_metrics["sam"] < best_sam:
             best_sam = val_metrics["sam"]
-            torch.save(model.state_dict(), best_sam_model_path)
+            torch.save(ema_model.state_dict(), best_sam_model_path)
 
     print(f"Training finished. Best val PSNR: {best_psnr:.2f} dB, Best val SAM: {best_sam:.2f} deg")
 

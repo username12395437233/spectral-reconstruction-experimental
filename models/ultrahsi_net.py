@@ -33,6 +33,58 @@ class FeatureFusionBlock(nn.Module):
         return fused + self.block(fused)
 
 
+class SpectralAttention3D(nn.Module):
+    def __init__(self, num_spectral):
+        super().__init__()
+        hidden = max(8, num_spectral // 2)
+        self.net = nn.Sequential(
+            nn.Conv3d(1, hidden, kernel_size=(3, 1, 1), padding=(1, 0, 0)),
+            nn.GELU(),
+            nn.Conv3d(hidden, 1, kernel_size=(3, 1, 1), padding=(1, 0, 0)),
+            nn.Sigmoid(),
+        )
+
+    def forward(self, cube):
+        return cube * self.net(cube)
+
+
+class SpectralRefinement3D(nn.Module):
+    def __init__(self, d_model, num_spectral):
+        super().__init__()
+        hidden_2d = max(32, d_model // 2)
+        self.context_proj = nn.Sequential(
+            nn.Conv2d(d_model, hidden_2d, 3, padding=1),
+            nn.GELU(),
+        )
+        self.rgb_proj = nn.Sequential(
+            nn.Conv2d(3, hidden_2d // 2, 3, padding=1),
+            nn.GELU(),
+        )
+        self.fuse_2d = nn.Sequential(
+            nn.Conv2d(hidden_2d + hidden_2d // 2, num_spectral, 3, padding=1),
+            nn.GELU(),
+        )
+        self.spectral_attn = SpectralAttention3D(num_spectral)
+        self.refiner_3d = nn.Sequential(
+            nn.Conv3d(2, 8, kernel_size=(3, 3, 3), padding=1),
+            nn.GELU(),
+            nn.Conv3d(8, 8, kernel_size=(3, 3, 3), padding=1),
+            nn.GELU(),
+            nn.Conv3d(8, 1, kernel_size=(3, 3, 3), padding=1),
+        )
+
+    def forward(self, coarse, head_feat, rgb):
+        context = self.context_proj(head_feat)
+        rgb_embed = self.rgb_proj(rgb)
+        fused_2d = self.fuse_2d(torch.cat([context, rgb_embed], dim=1))
+
+        coarse_cube = coarse.unsqueeze(1)
+        fused_cube = fused_2d.unsqueeze(1)
+        coarse_cube = self.spectral_attn(coarse_cube)
+        residual = self.refiner_3d(torch.cat([coarse_cube, fused_cube], dim=1)).squeeze(1)
+        return coarse + residual
+
+
 class UltraHSINet(nn.Module):
     def __init__(
         self,
@@ -105,27 +157,14 @@ class UltraHSINet(nn.Module):
             nn.GELU(),
             nn.Conv2d(d_model, d_model, 1),
         )
-        self.rgb_embed = nn.Sequential(
-            nn.Conv2d(3, d_model // 2, 3, padding=1),
-            nn.GELU(),
-            nn.Conv2d(d_model // 2, d_model // 2, 3, padding=1),
-            nn.GELU(),
-        )
-        self.rgb_skip = nn.Sequential(
-            nn.Conv2d(3, d_model // 2, 3, padding=1),
-            nn.GELU(),
-            nn.Conv2d(d_model // 2, num_spectral, 1),
-        )
         self.coarse_head = nn.Sequential(
-            nn.Conv2d(d_model, num_spectral, 3, padding=1),
-            nn.Sigmoid(),
-        )
-        self.refinement_head = nn.Sequential(
-            nn.Conv2d(d_model + d_model // 2 + num_spectral, d_model, 3, padding=1),
+            nn.Conv2d(d_model, d_model, 3, padding=1),
             nn.GELU(),
             ResidualRefinementBlock(d_model),
             nn.Conv2d(d_model, num_spectral, 3, padding=1),
+            nn.Sigmoid(),
         )
+        self.refiner = SpectralRefinement3D(d_model=d_model, num_spectral=num_spectral)
         self.final_activation = nn.Sigmoid()
 
     def forward(self, rgb, return_aux=False):
@@ -156,12 +195,9 @@ class UltraHSINet(nn.Module):
         head_feat = self.pre_head(d1)
         head_feat = head_feat + self.spectral_mixer(head_feat)
 
-        coarse_logits = self.coarse_head[0](head_feat) + self.rgb_skip(rgb)
-        coarse = self.coarse_head[1](coarse_logits)
-
-        refine_input = torch.cat([head_feat, self.rgb_embed(rgb), coarse], dim=1)
-        residual_logits = self.refinement_head(refine_input)
-        out = self.final_activation(coarse_logits + residual_logits)
+        coarse = self.coarse_head(head_feat)
+        refined = self.refiner(coarse, head_feat, rgb)
+        out = self.final_activation(refined)
 
         if return_aux:
             return out, {"coarse": coarse}
