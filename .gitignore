@@ -28,3 +28,8 @@ htmlcov/
 
 # Environment variables (sensitive data)
 .env
+
+
+best_sam_model.pth
+best_psnr_model.pth
+best_model.pth

@@ -30,6 +30,6 @@ model:
 
 training:
   batch_size: 8
-  epochs: 200
+  epochs: 20
   lr: 0.0001 # или 1e-4 без кавычек
   device: "cuda"
