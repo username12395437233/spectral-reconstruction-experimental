@@ -54,3 +54,11 @@ If GPU memory is limited, reduce `train_patch_size` first and only then `batch_s
 `Mamba3` can fail in Triton kernels on some environments during forward/backward. If training crashes inside `mamba3_*` kernels, switch `model.ssm_version` to `"mamba2"` and continue improving the data pipeline / loss / architecture first.
 
 Validation logs include `PSNR`, `RMSE`, `SAM`, and `MSSIM`.
+
+After training, `train.py` automatically reloads `best_model.pth` and prints final metrics on the `test` split.
+
+To evaluate the saved best checkpoint without retraining:
+
+```bash
+python evaluate_best.py
+```
