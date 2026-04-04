@@ -70,6 +70,8 @@ def evaluate(model, data_loader, device):
         for rgb, hsi in data_loader:
             rgb, hsi = rgb.to(device), hsi.to(device)
             pred = model(rgb)
+            if isinstance(pred, tuple):
+                pred = pred[0]
             totals["psnr"] += psnr(pred, hsi).item()
             totals["rmse"] += rmse(pred, hsi).item()
             totals["sam"] += sam(pred, hsi).item()
@@ -116,6 +118,7 @@ def train():
         optimizer, T_max=config["training"]["epochs"]
     )
     criterion = CombinedLoss()
+    coarse_loss_weight = config["training"].get("coarse_loss_weight", 0.3)
 
     best_psnr = float("-inf")
     best_sam = float("inf")
@@ -129,8 +132,11 @@ def train():
         for rgb, hsi in tqdm(train_loader, desc=f"Epoch {epoch + 1}"):
             rgb, hsi = rgb.to(device), hsi.to(device)
             optimizer.zero_grad()
-            pred = model(rgb)
+            pred, aux_outputs = model(rgb, return_aux=True)
             loss = criterion(pred, hsi)
+            coarse = aux_outputs.get("coarse")
+            if coarse is not None:
+                loss = loss + coarse_loss_weight * criterion(coarse, hsi)
             loss.backward()
             optimizer.step()
             epoch_loss += loss.item()
