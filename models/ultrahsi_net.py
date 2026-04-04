@@ -18,6 +18,20 @@ class ResidualRefinementBlock(nn.Module):
         return x + self.block(x)
 
 
+class FeatureFusionBlock(nn.Module):
+    def __init__(self, channels):
+        super().__init__()
+        self.block = nn.Sequential(
+            nn.Conv2d(channels, channels, 3, padding=1),
+            nn.GELU(),
+            nn.Conv2d(channels, channels, 3, padding=1),
+        )
+
+    def forward(self, x, skip):
+        fused = x + skip
+        return fused + self.block(fused)
+
+
 class UltraHSINet(nn.Module):
     def __init__(
         self,
@@ -55,6 +69,15 @@ class UltraHSINet(nn.Module):
         # Encoder
         self.down1 = nn.Conv2d(d_model, d_model*2, 4, stride=2, padding=1)
         self.down2 = nn.Conv2d(d_model*2, d_model*4, 4, stride=2, padding=1)
+
+        self.mid_encoder = MIFModule(
+            d_model * 2,
+            d_state=d_state,
+            d_conv=d_conv,
+            expand=expand,
+            headdim=headdim,
+            ssm_version=ssm_version,
+        )
         
         self.bottleneck = MIFModule(
             d_model * 4,
@@ -67,6 +90,8 @@ class UltraHSINet(nn.Module):
         
         self.up2 = nn.ConvTranspose2d(d_model*4, d_model*2, 4, stride=2, padding=1)
         self.up1 = nn.ConvTranspose2d(d_model*2, d_model, 4, stride=2, padding=1)
+        self.fuse2 = FeatureFusionBlock(d_model * 2)
+        self.fuse1 = FeatureFusionBlock(d_model)
         
         if use_gradient_attn:
             self.grad_attn2 = GradientAttention(d_model*2)
@@ -105,16 +130,17 @@ class UltraHSINet(nn.Module):
             x = self.input_conv(rgb)                # (B,d_model,H,W)
         
         e1 = self.down1(x)      # (B,d_model*2,H/2,W/2)
+        e1 = self.mid_encoder(e1)
         e2 = self.down2(e1)     # (B,d_model*4,H/4,W/4)
         b = self.bottleneck(e2) # (B,d_model*4,H/4,W/4)
         d2 = self.up2(b)        # (B,d_model*2,H/2,W/2)
         if self.use_gradient_attn:
             d2 = self.grad_attn2(d2)
-        d2 = d2 + e1
+        d2 = self.fuse2(d2, e1)
         d1 = self.up1(d2)       # (B,d_model,H,W)
         if self.use_gradient_attn:
             d1 = self.grad_attn1(d1)
-        d1 = d1 + x
+        d1 = self.fuse1(d1, x)
         head_feat = self.pre_head(d1)
         head_feat = head_feat + self.spectral_mixer(head_feat)
         spectral_logits = self.output_conv[0](head_feat) + self.rgb_skip(rgb)
