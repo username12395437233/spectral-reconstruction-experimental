@@ -63,7 +63,7 @@ def main():
         config = yaml.safe_load(f)
 
     device = torch.device(config["training"]["device"])
-    # checkpoint_name = sys.argv[1] if len(sys.argv) > 1 else "best_psnr_model.pth"
+    # checkpoint_name = sys.argv[1] if len(sys.argv) > 1 else "best_psnr_model_final.pth"
     checkpoint_name = sys.argv[1] if len(sys.argv) > 1 else "best_sam_model.pth"
     checkpoint_path = Path(checkpoint_name)
     print(checkpoint_path)
