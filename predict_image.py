@@ -16,7 +16,7 @@ from PIL import Image
 from models.ultrahsi_net import UltraHSINet
 
 CONFIG_PATH = "config.yaml"
-CHECKPOINT_PATH = "best_psnr_model.pth"
+CHECKPOINT_PATH = "best_psnr_model_final.pth"
 IMAGE_PATH = "/mnt/c/Users/User/repo/datasets/test1.png"
 
 OUTPUT_NPY_PATH = "/mnt/c/Users/User/repo/saved/test_pred_hsi.npy"
@@ -61,7 +61,6 @@ def pad_to_multiple(tensor, multiple=4):
     if pad_h == 0 and pad_w == 0:
         return tensor, (0, 0)
 
-    # pad format: (left, right, top, bottom)
     padded = F.pad(tensor, (0, pad_w, 0, pad_h), mode="reflect")
     return padded, (pad_h, pad_w)
 

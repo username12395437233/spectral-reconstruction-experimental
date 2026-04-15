@@ -25,8 +25,6 @@ class SS2D_Enhanced(nn.Module):
                     f"Mamba3 requires d_model divisible by headdim, got d_model={d_model}, headdim={headdim}. "
                     "Choose a model.d_model so that bottleneck channels (4 * d_model) are divisible by headdim."
                 )
-            # Mamba3's Triton rotary-QK kernel needs the effective QK dimension to be >= 16.
-            # With the default rope_fraction=0.5 in upstream Mamba3, this implies d_state >= 64.
             if d_state < 64:
                 raise ValueError(
                     f"Mamba3 requires d_state >= 64 for the current kernel path, got d_state={d_state}. "

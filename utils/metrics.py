@@ -36,7 +36,6 @@ def mssim(pred, target, data_range=1.0):
     return torch.tensor(float(np.mean(scores)), dtype=pred.dtype, device=pred.device)
 
 def ergas(pred, target, ratio=4):
-    # ratio = spatial resolution ratio (обычно 4 для CAVE 512->128? уточнить)
     err = pred - target
     mse_bands = torch.mean(err**2, dim=(2,3))
     mean_target = torch.mean(target, dim=(2,3))
